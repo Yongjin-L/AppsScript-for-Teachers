@@ -1,0 +1,37 @@
+function GPT(promptCell, inputData) {
+  // Your GPT API endpoint and key
+  const apiUrl = "https://api.openai.com/v1/chat/completions"; // Correct endpoint for chat models
+  const apiKey = "Your API"; // Replace with your actual GPT API key
+
+  // Prepare the payload
+  const payload = {
+    model: "gpt-4o-mini", // model names
+    messages: [
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: `${promptCell}\n${inputData}` } // Use template literals correctly
+    ],
+    max_tokens: 3000 // Adjust tokens based on your needs
+  };
+
+  // Options for the API call
+  const options = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}` // Correct syntax for Bearer token
+    },
+    payload: JSON.stringify(payload) // Convert payload to JSON string
+  };
+
+  try {
+    // Make the API request
+    const response = UrlFetchApp.fetch(apiUrl, options); // Google Apps Script function for HTTP requests
+    const json = JSON.parse(response.getContentText());
+
+    // Return the response text
+    return json.choices[0].message.content.trim(); // Access response message content
+  } catch (error) {
+    // Handle errors
+    return `Error: ${error.message}`; // Properly format error message
+  }
+}
