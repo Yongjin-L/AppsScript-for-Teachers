@@ -1,0 +1,104 @@
+/**
+ * Processes data from 'Form Responses 1', calls the Gemini API,
+ * and stores the summarized answer in the 'Answer' sheet.
+ */
+function processAndSummarizeData() {
+  const SPREADSHEET = SpreadsheetApp.getActiveSpreadsheet();
+  const INPUT_SHEET_NAME = "Form Responses 1"; // update the sheet name
+  const OUTPUT_SHEET_NAME = "Answer"; // update the sheet name
+  const INPUT_COLUMN_INDEX = 2; // Column B is index 2 (A=1, B=2, etc.)
+  const PROMPT_TEMPLATE = "Your prompt to analyze data"; // Update your prompt
+
+  const GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!GEMINI_API_KEY) {
+    throw new Error("Gemini API Key not found in script properties. Please set it up.");
+  }
+
+  try {
+    const inputSheet = SPREADSHEET.getSheetByName(INPUT_SHEET_NAME);
+    if (!inputSheet) {
+      throw new Error(`Sheet '${INPUT_SHEET_NAME}' not found.`);
+    }
+
+    // Get all data from the specified column, excluding the header
+    const lastRow = inputSheet.getLastRow();
+    if (lastRow < 2) { // Only header row or empty
+      Logger.log("No data found in 'Form Responses 1' to process.");
+      return;
+    }
+    const dataRange = inputSheet.getRange(2, INPUT_COLUMN_INDEX, lastRow - 1, 1);
+    const dataValues = dataRange.getDisplayValues().flat(); // Get 2D array and flatten to 1D
+
+    // Combine all data into a single string for the prompt
+    const combinedData = dataValues.filter(String).join("\n"); // Filter out empty strings
+    if (!combinedData) {
+        Logger.log("No valid data found in column B to send to Gemini.");
+        return;
+    }
+
+    const fullPrompt = `${PROMPT_TEMPLATE}\n\n데이터:\n${combinedData}`;
+    Logger.log("Full prompt sent to Gemini:\n" + fullPrompt);
+
+    // Call Gemini API
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`; // update a LLM model if you want
+    const payload = {
+      contents: [
+        {
+          parts: [
+            { text: fullPrompt }
+          ]
+        }
+      ]
+    };
+
+    const options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true // Allows inspection of error responses
+    };
+
+    Logger.log("Calling Gemini API...");
+    const response = UrlFetchApp.fetch(API_URL, options);
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+    Logger.log("Gemini API Response Code: " + responseCode);
+    Logger.log("Gemini API Response Body: " + responseBody);
+
+    if (responseCode !== 200) {
+      throw new Error(`Gemini API Error (Code: ${responseCode}): ${responseBody}`);
+    }
+
+    const jsonResponse = JSON.parse(responseBody);
+    const generatedText = jsonResponse.candidates[0].content.parts[0].text;
+    Logger.log("Gemini Generated Text:\n" + generatedText);
+
+    // Store the answer in the 'Answer' sheet
+    const outputSheet = SPREADSHEET.getSheetByName(OUTPUT_SHEET_NAME);
+    if (!outputSheet) {
+      // Create the sheet if it doesn't exist
+      outputSheet = SPREADSHEET.insertSheet(OUTPUT_SHEET_NAME);
+    }
+
+    // Clear previous content in 'Answer' sheet and write new content
+    outputSheet.clearContents(); // Clear all data
+    outputSheet.getRange("A1").setValue("Gemini Generated Summary and Insights:");
+    outputSheet.getRange("A2").setValue(generatedText);
+    outputSheet.autoResizeColumn(1); // Make column A wide enough
+    Logger.log(`Generated answer saved to sheet '${OUTPUT_SHEET_NAME}'.`);
+
+  } catch (e) {
+    Logger.log("Error processing data: " + e.message);
+    Browser.msgBox("Error", "An error occurred: " + e.message + " Check the Apps Script logs for details.", Browser.Buttons.OK);
+  }
+}
+
+/**
+ * Creates a custom menu in Google Sheets to trigger the process.
+ */
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('Gemini Automation')
+      .addItem('Summarize Data & Update Sheet', 'processAndSummarizeData')
+      .addToUi();
+}
