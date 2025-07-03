@@ -1,0 +1,119 @@
+// --- CONFIGURATION ---
+const SHEET_ID = '1Bm000'; // Update with your Google Sheet ID
+const SCRIPT_ID = '1Lo000'; // Update with your deployed Sheet Script ID
+const TARGET_TEXTBOX_TITLE = 'summary_box'; // The Alt text title of your target textbox
+// --- END CONFIGURATION ---
+
+/**
+ * Creates a custom menu in the Google Slides UI when the presentation is opened.
+ */
+function onOpen() {
+  SlidesApp.getUi()
+      .createMenu('Sheet Actions')
+      .addItem('1. Run Sheet Process Only', 'runSheetProcess')
+      .addItem('2. Update Textbox Only', 'updateTextboxFromSheet')
+      .addSeparator()
+      .addItem('Run Both in Sequence', 'runProcessAndUpdateText')
+      .addToUi();
+}
+
+/**
+ * Function 1: Calls and runs the 'processAndSummarizeData' function in your Google Sheet.
+ * Returns true on success, false on failure.
+ */
+function runSheetProcess() {
+  try {
+    const url = `https://script.googleapis.com/v1/scripts/${SCRIPT_ID}:run`;
+    const accessToken = ScriptApp.getOAuthToken();
+    const payload = {
+      'function': 'processAndSummarizeData',
+      'devMode': true // Set to false when deploying for production for slightly faster execution
+    };
+    const options = {
+      'method': 'post',
+      'contentType': "application/json",
+      'headers': { 'Authorization': 'Bearer ' + accessToken },
+      'payload': JSON.stringify(payload),
+      'muteHttpExceptions': true
+    };
+
+    Logger.log('Calling Google Sheet script...');
+    const response = UrlFetchApp.fetch(url, options);
+    const responseCode = response.getResponseCode();
+
+    if (responseCode === 200) {
+      Logger.log('✅ Success: "processAndSummarizeData" function run in Google Sheet.');
+      return true;
+    } else {
+      const responseBody = response.getContentText();
+      Logger.log(`❌ Error calling script (Code: ${responseCode}): ${responseBody}`);
+      return false;
+    }
+  } catch (e) {
+    Logger.log('❌ Error during runSheetProcess: ' + e.toString());
+    return false;
+  }
+}
+
+/**
+ * Function 2: Extracts data from the sheet and updates the specified textbox in the slide.
+ * Returns true on success, false on failure.
+ */
+function updateTextboxFromSheet() {
+  const slide = SlidesApp.getActivePresentation().getSelection().getCurrentPage();
+  if (!slide) {
+    Logger.log('❌ Error: No slide selected for updating textbox.');
+    return false;
+  }
+
+  try {
+    const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Answer');
+    if (!sheet) {
+      Logger.log(`❌ Error: Sheet 'Answer' not found in spreadsheet ID: ${SHEET_ID}`);
+      return false;
+    }
+
+    const dataRange = sheet.getRange('A2');
+    const data = dataRange.getValue();
+
+    let targetShape = null;
+    const shapes = slide.getShapes();
+    for (const shape of shapes) {
+      if (shape.getTitle() === TARGET_TEXTBOX_TITLE) {
+        targetShape = shape;
+        break;
+      }
+    }
+
+    if (targetShape) {
+      targetShape.getText().setText(data.toString());
+      Logger.log(`✅ Textbox "${TARGET_TEXTBOX_TITLE}" updated with data: ${data}`);
+      return true;
+    } else {
+      Logger.log(`❌ Error: Could not find a shape with the Alt text title "${TARGET_TEXTBOX_TITLE}" on this slide.`);
+      return false;
+    }
+  } catch (e) {
+    Logger.log('❌ Error during updateTextboxFromSheet: ' + e.toString());
+    return false;
+  }
+}
+
+/**
+ * Main Function: Runs the two functions above in the correct order.
+ * Provides a single success/failure message at the end.
+ */
+function runProcessAndUpdateText() {
+  const sheetProcessSuccess = runSheetProcess();
+
+  if (sheetProcessSuccess) {
+    const updateTextboxSuccess = updateTextboxFromSheet();
+    if (updateTextboxSuccess) {
+      SlidesApp.getUi().alert('✅ Workflow Completed: Data analyzed and slide updated successfully!');
+    } else {
+      SlidesApp.getUi().alert('⚠️ Workflow Completed with Issues: Data analysis ran, but failed to update the slide textbox. Check logs.');
+    }
+  } else {
+    SlidesApp.getUi().alert('❌ Workflow Failed: Could not run data analysis in the Google Sheet. Check logs.');
+  }
+}
