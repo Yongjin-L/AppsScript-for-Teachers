@@ -16,6 +16,9 @@ Currently, the repository contains the following Apps Script examples:
 *   **Dailyquestions:**
     This is script generates daily questions based on the data present in your Google Sheet and automatically sends them to recipients via email.
     This can be useful for daily review, quizzes, or announcements.
+*   **Automated Presentation Analysis with Google Apps Script**
+    This topic holds two Apps scripts: CodeforSlide and CodeforSheet.
+    For more details, please find this link. https://medium.com/@yongjinL/automated-presentation-analysis-with-google-apps-script-58cd1a91e93b
 
 ## Intended Use & Target Audience
 
